@@ -1,8 +1,8 @@
 const AWS = require('aws-sdk');
 
-var params = {
-  QueueNamePrefix: 'test-qbo-purchase'
-};
+// var params = {
+//   QueueNamePrefix: 'test-qbo-purchase'
+// };
 
 
 AWS.config.update({
@@ -12,45 +12,70 @@ AWS.config.update({
 const SQS = new AWS.SQS({apiVersion: '2012-12-05'});
 console.log(SQS !== undefined ? 'SQS is legit' : 'ergh');
 
-SQS.listQueues(params, function (err, data) {
-  if (err) {
-    console.log(err, err.stack);
-  } else {
-    console.log('List Queue Results:', data)
+function getQueue() {
+  return new Promise((resolve, reject) => {
+    const params = {
+      QueueNamePrefix: 'test-qbo-purchase'
+    };
 
+    SQS.listQueues(params, function (err, data) {
+      if (err) {
+        console.log(err, err.stack);
+        reject(err);
+      } else {
+        if (data.QueueUrls) {
+          resolve(data.QueueUrls[0]);
+        } else {
+          reject(new Error('No data found'));
+        }
+      }
+    });
+
+  })
+}
+
+getQueue().then(queueName => {
+  for (var j = 0; j < 2; j++) {
     SQS.sendMessage({
-      MessageBody: 'Information relevant to your enterprise',
-      DelaySeconds: 1,
-      QueueUrl: data.QueueUrls[0],
+      MessageBody: 'Information relevant to your enterprise ' + j,
       DelaySeconds: 0,
+      QueueUrl: queueName,
       MessageAttributes: {
-        ImportantTidbit: {
+        'ImportantTidbit': {
           DataType: 'String',
           StringValue: 'Juicy details about yo business'
         }
       },
-      MessageDeduplicationId: '1234567890',
-      MessageGroupId: 'message_group_id'
+      // MessageDeduplicationId: 'dedupe_' + Date.now(),
+      MessageGroupId: 'message_group_id' + j
     }, (err, data) => {
-      console.log('sent the message', data ? data.MessageId : 'no data callback on send');
+      if (err) {
+        console.log(err);
+      }
+      console.log('Sent the message', data ? data.MessageId : 'no data callback on send');
     });
 
+  }
+}).catch(err => console.log('Send ERR', err));
+
+setTimeout(() => {
+  getQueue().then(queueName => {
     SQS.receiveMessage({
-      MaxNumberOfMessages: 10,
+      MaxNumberOfMessages: 2,
       QueueUrl: data.QueueUrls[0],
       AttributeNames: [
         "SentTimestamp"
       ],
       MessageAttributeNames: [ "All" ],
+      VisibilityTimeout: 0,
+      WaitTimeSeconds: 0
     }, (err, data) => {
       if (err) {
         console.log('Problem receiving message: ', err);
       } else {
         console.log('Got the message:', { data });
-        console.log('Got the body:', data.body );
       }
 
-    });
-  }
-});
-
+    }).catch(err => console.log('Receive ERR', err));
+  });
+}, 1000);
