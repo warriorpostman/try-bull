@@ -1,10 +1,5 @@
 const AWS = require('aws-sdk');
 
-// var params = {
-//   QueueNamePrefix: 'test-qbo-purchase'
-// };
-
-
 AWS.config.update({
   region: 'us-west-2'
 });
@@ -46,8 +41,6 @@ getQueue().then(queueName => {
           StringValue: 'Juicy details about yo business'
         }
       },
-      // MessageDeduplicationId: 'dedupe_' + Date.now(),
-      MessageGroupId: 'message_group_id' + j
     }, (err, data) => {
       if (err) {
         console.log(err);
@@ -59,10 +52,11 @@ getQueue().then(queueName => {
 }).catch(err => console.log('Send ERR', err));
 
 setTimeout(() => {
+  console.log('Try reading');
   getQueue().then(queueName => {
     SQS.receiveMessage({
-      MaxNumberOfMessages: 2,
-      QueueUrl: data.QueueUrls[0],
+      MaxNumberOfMessages: 1,
+      QueueUrl: queueName,
       AttributeNames: [
         "SentTimestamp"
       ],
@@ -73,9 +67,11 @@ setTimeout(() => {
       if (err) {
         console.log('Problem receiving message: ', err);
       } else {
-        console.log('Got the message:', { data });
+        if (data)
+          console.log('Got the message:', JSON.stringify(data, null, '  '));
+        else 
+          console.log('no data received');
       }
-
     }).catch(err => console.log('Receive ERR', err));
   });
 }, 1000);
